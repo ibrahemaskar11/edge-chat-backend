@@ -8,10 +8,10 @@ export interface IUser extends Document {
   name: string;
   email: string;
   password: string;
-  passwordConfirm: string;
+  passwordConfirm: string | undefined;
   passwordChangedAt: Date;
-  passwordResetToken: string;
-  passwordResetExpires: Date;
+  passwordResetToken: string | undefined;
+  passwordResetExpires: Date | undefined;
   active: Boolean;
   role: string;
   createdAt: Date;
@@ -33,7 +33,7 @@ const userSchema = new mongoose.Schema<IUser>({
     required: [true, "Email is required"],
     unique: true,
     lowercase: true,
-    validate: [validator.isEmail, "Please provide a valid email"],
+    // validate: [validator.isEmail, "Please provide a valid email"],
   },
   password: {
     type: String,
@@ -45,10 +45,10 @@ const userSchema = new mongoose.Schema<IUser>({
     type: String,
     required: [true, "Please confirm your password"],
     validate: {
-      validator: function (el: string): boolean {
+      validator: function (this: IUser, el: string): boolean {
         return el === this.password;
       },
-      message: "Passwords do not match",
+      message: "Passwords must match",
     },
   },
   passwordChangedAt: Date,
@@ -75,8 +75,16 @@ const userSchema = new mongoose.Schema<IUser>({
   },
 });
 
+userSchema.pre<IUser>("save", function (next): void {
+  if (!this.isNew) return next();
+  if (this.password !== this.passwordConfirm) {
+    throw new Error("Password and password confirm do not match");
+  }
+  next();
+});
+
 userSchema.pre<IUser>("save", async function (next): Promise<void> {
-  if (!this.isModified('password')) return next();
+  if (!this.isModified("password")) return next();
   this.password = await bcrypt.hash(this.password, 12);
   this.passwordConfirm = undefined;
   next();

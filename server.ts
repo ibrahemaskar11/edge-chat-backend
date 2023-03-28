@@ -5,18 +5,15 @@ import mongoose from "mongoose";
 dotenv.config({
   path: "./config.env",
 });
-
-const PORT = process.env.PORT || 5000;
-const db = process.env.MONGO_URI.replace(
-  "<password>",
-  process.env.MONGO_PASSWORD
-);
+const db: string | undefined = process.env.MONGO_URI;
+const PORT: string | number = process.env.PORT || 5000;
 mongoose
-  .connect(db)
+  .connect(db as string)
   .then(() => {
     console.log("DB connection successful!");
-  }).catch((err)=>{
-    console.log('failed to connect to db');
+  })
+  .catch((err) => {
+    console.log("failed to connect to db");
     process.exit(1);
   });
 
@@ -31,4 +28,3 @@ const server = app.listen(PORT, () => {
 //     process.exit(1);
 //   });
 // });
-

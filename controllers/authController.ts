@@ -20,7 +20,6 @@ const createSendToken = (
     secure: req.secure || req.headers["x-forwarded-proto"] === "https",
   };
   res.cookie("jwt", token, cookieOptions);
-  user.password = undefined;
   res.status(statusCode).json({
     status: "success",
     token,
@@ -46,7 +45,9 @@ export const login = async (
     if (!email || !password) {
       throw new Error("Please provide email and password");
     }
-    const user: IUser = await User.findOne({ email }).select("+password");
+    const user: IUser | null = await User.findOne({ email }).select(
+      "+password"
+    );
     console.log(user);
     if (!user || !(await user.correctPassword(password, user.password))) {
       console.log("Incorrect email or password");
@@ -54,10 +55,10 @@ export const login = async (
     }
     const token: string = signToken(user._id);
     createSendToken(user, 200, req, res);
-  } catch (err) {
+  } catch (err: Error | any) {
     res.status(400).json({
       status: "fail",
-      message: err,
+      message: err.message,
     });
   }
 };
@@ -67,6 +68,12 @@ export const signup = async (
   next: NextFunction
 ) => {
   try {
+    const existingUser: IUser | null = await User.findOne({
+      email: req.body.email,
+    });
+    if (existingUser) {
+      throw new Error("User already exists");
+    }
     const newUser: IUser = await User.create({
       name: req.body.name,
       email: req.body.email,
@@ -75,10 +82,10 @@ export const signup = async (
     });
     const token: string = signToken(newUser._id);
     createSendToken(newUser, 200, req, res);
-  } catch (err) {
+  } catch (err: Error | any) {
     res.status(400).json({
       status: "fail",
-      message: err,
+      message: err.message,
     });
   }
 };
@@ -91,12 +98,12 @@ export const forgotPassword = async (
   try {
     const { email } = req.body;
     console.log(email);
-    const user: IUser = await User.findOne({ email });
+    const user: IUser | null = await User.findOne({ email });
     if (!user) {
       throw new Error("No user found with this email");
     }
     const resetToken: string = user.createResetToken();
-    await user.save({ validateBeforeSave: false});
+    await user.save({ validateBeforeSave: false });
     console.log(resetToken);
     const resetURL: string = `${req.protocol}://${req.get(
       "host"
@@ -105,7 +112,7 @@ export const forgotPassword = async (
       status: "success",
       resetToken,
     });
-  } catch (err) {
+  } catch (err: Error | any) {
     console.log(err);
     res.status(400).json({
       status: "fail",
@@ -136,7 +143,7 @@ export const resetPassword = async (
     user.passwordResetExpires = undefined;
     await user.save();
     createSendToken(user, 200, req, res);
-  } catch (err) {
+  } catch (err: Error | any) {
     res.status(400).json({
       status: "fail",
       message: err.message,
