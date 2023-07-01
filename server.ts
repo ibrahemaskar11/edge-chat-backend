@@ -5,10 +5,12 @@ import mongoose from "mongoose";
 dotenv.config({
   path: "./config.env",
 });
-const db: string | undefined = process.env.MONGO_URI;
+const db: string = process.env.MONGO_URI;
 const PORT: string | number = process.env.PORT || 5000;
+console.log(process.env.EMAIL_DUMMY_HOST);
+
 mongoose
-  .connect(db as string)
+  .connect(db)
   .then(() => {
     console.log("DB connection successful!");
   })

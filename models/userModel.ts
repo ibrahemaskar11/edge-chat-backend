@@ -1,44 +1,33 @@
 import mongoose from "mongoose";
-import { Document } from "mongoose";
 import validator from "validator";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
+import { IUser } from "../utils/interfaces";
 
-export interface IUser extends Document {
-  name: string;
-  email: string;
-  password: string;
-  passwordConfirm: string | undefined;
-  passwordChangedAt: Date;
-  passwordResetToken: string | undefined;
-  passwordResetExpires: Date | undefined;
-  active: Boolean;
-  role: string;
-  createdAt: Date;
-  photo: string;
-  correctPassword(
-    candidatePassword: string,
-    userPassword: string
-  ): Promise<boolean>;
-  createResetToken(): string;
-}
-
-const userSchema = new mongoose.Schema<IUser>({
+const userSchema: mongoose.Schema<IUser> = new mongoose.Schema<IUser>({
   name: {
     type: String,
     required: true,
+    validate: {
+      validator: function (this: IUser, el: string): boolean {
+        const regex = /^[a-zA-Z ]{2,30}$/;
+        return regex.test(el);
+      },
+      message: "Name must be 2-30 characters, no numbers or special characters",
+    },
   },
   email: {
     type: String,
     required: [true, "Email is required"],
     unique: true,
     lowercase: true,
-    // validate: [validator.isEmail, "Please provide a valid email"],
+    validate: [validator.isEmail, "Please provide a valid email"],
   },
   password: {
     type: String,
     required: [true, "Password is required"],
-    minlength: [8, "Password must be at least 8 characters"],
+    minlength: [6, "Password must be at least 6 characters"],
+    maxlength: [16, "Password must be less than 16 characters"],
     select: false,
   },
   passwordConfirm: {
@@ -114,6 +103,24 @@ userSchema.methods.createResetToken = function (): string {
   this.passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000);
   return resetToken;
 };
+
+userSchema.methods.changedPasswordAfter = function (JWTTimestamp: number) {
+  if (this.passwordChangedAt) {
+    const changedTimestamp: number = Math.floor(
+      this.passwordChangedAt.getTime() / 1000
+    );
+
+    return JWTTimestamp < changedTimestamp;
+  }
+
+  // False means NOT changed
+  return false;
+};
+
+userSchema.pre(/^find/, function (next): void {
+  this.select("-__v");
+  next();
+});
 
 const model: mongoose.Model<IUser> = mongoose.model("User", userSchema);
 export default model;
