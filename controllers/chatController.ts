@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import Chat from "../models/chatModel";
-import { IChat } from "../utils/interfaces";
+import { IChat, IMessage } from "../utils/interfaces";
 import AppError from "../utils/AppError";
+import Message from "../models/messageModel";
+import User from "../models/userModel";
 
 export const fetchChats = async (
   req: Request,
@@ -10,15 +12,57 @@ export const fetchChats = async (
 ) => {
   try {
     const { requestingUser } = req.body;
-    const chats: IChat[] = await Chat.find({
-      users: { $in: requestingUser.id },
-    }).populate("users", "name email photo");
+    const { searchTerm } = req.query;
+    const chats = !searchTerm
+      ? await Chat.find({ users: { $in: requestingUser.id } }).populate(
+          "latestMessage"
+        )
+      : await Chat.find({
+          users: { $in: requestingUser.id },
+          chatName: { $regex: searchTerm, $options: "i" },
+        }).populate("latestMessage");
+
+    for (const chat of chats) {
+      if (chat.isGroupChat) continue;
+      const otherUserId = chat.users.find(
+        (user) => user.toString() !== requestingUser.id.toString()
+      );
+      const chatsDisplay = await User.findById(otherUserId).select(
+        "name photo"
+      );
+      if (!chatsDisplay) {
+        throw new AppError("Something went wrong", 500);
+      }
+      chat.chatName = chatsDisplay.name;
+      chat.groupImg = chatsDisplay.photo;
+      console.log(chat);
+    }
+    // chats.forEach((chat) => {
+    //   if (chat.latestMessage) {
+    //     const currentDate = new Date();
+    //     const targetDate = chat.latestMessage.createdAt;
+    //     const timeDiff = Math.abs(currentDate.getTime() - targetDate.getTime());
+    //     const seconds = Math.floor(timeDiff / 1000);
+
+    //     if (seconds < 60) {
+    //       chat.latestMessage.timeSinceCreation = "now";
+    //     } else if (seconds < 3600) {
+    //       const minutes = Math.floor(seconds / 60);
+    //       chat.latestMessage.timeSinceCreation = minutes + "m";
+    //     } else if (seconds < 86400) {
+    //       const hours = Math.floor(seconds / 3600);
+    //       chat.latestMessage.timeSinceCreation = hours + "h";
+    //     } else {
+    //       const days = Math.floor(seconds / 86400);
+    //       chat.latestMessage.timeSinceCreation = days + "d";
+    //     }
+    //     console.log(chat.latestMessage.timeSinceCreation)
+    //   }
+    // });
     res.status(200).json({
       status: "success",
       results: chats.length,
-      data: {
-        chats,
-      },
+      data: { chats },
     });
   } catch (err: AppError | Error | any) {
     next(err);
@@ -31,19 +75,86 @@ export const accessChat = async (
   next: NextFunction
 ) => {
   const { chatId } = req.params;
+  const { requestingUser } = req.body;
   try {
     const chat: IChat | null = await Chat.findById(chatId).populate(
-      "users",
-      "name email photo"
+      "latestMessage"
     );
     if (!chat) {
       throw new AppError("Chat doesn't exist", 404);
     }
+    if (!chat.isGroupChat) {
+      const otherUserId = chat.users.find(
+        (user) => user.toString() !== requestingUser.id.toString()
+      );
+      const chatsDisplay = await User.findById(otherUserId).select(
+        "name photo"
+      );
+      if (!chatsDisplay) {
+        throw new AppError("Something went wrong", 500);
+      }
+      chat.chatName = chatsDisplay.name;
+      chat.groupImg = chatsDisplay.photo;
+    }
+    const messages: IMessage[] = await Message.find({
+      chat: chatId,
+    }).sort({ createdAt: -1 }).populate("sender", "name email photo");
 
+    interface IMessageGroup {
+      isMe: boolean;
+      messages: IMessage[];
+    }
+
+    const messageGroups: IMessageGroup[] = [{ isMe: false, messages: [] }];
+    let currentMessageGroup = 0;
+
+    for (let i = 0; i < messages.length; i++) {
+      const previousMessage = messages[i - 1];
+      const nextMessage = messages[i + 1];
+      const currentMessage = messages[i];
+
+      if (!previousMessage || !nextMessage) {
+        // If previousMessage or nextMessage is missing, it means it's the first or last message in the group
+        messageGroups[currentMessageGroup].messages.push(currentMessage);
+        messageGroups[currentMessageGroup].isMe =
+          currentMessage.sender._id.toString() === requestingUser.id.toString();
+      } else if (
+        currentMessage.sender._id.toString() === nextMessage.sender._id.toString()
+      ) {
+        // If the current message sender matches the next message sender, they belong to the same group
+        messageGroups[currentMessageGroup].messages.push(currentMessage);
+        messageGroups[currentMessageGroup].isMe =
+          currentMessage.sender._id.toString() === requestingUser.id.toString();
+      } else {
+        // If the current message sender doesn't match the next message sender, it's a new group
+        messageGroups[currentMessageGroup].messages.push(currentMessage);
+        // Reverse the messages within the group after pushing them
+        messageGroups[currentMessageGroup].messages.reverse();
+        // Set the isMe flag for the current group based on the first message in the group
+        messageGroups[currentMessageGroup].isMe =
+          messageGroups[currentMessageGroup].messages[0].sender._id.toString() ===
+          requestingUser.id.toString();
+        // Move to the next message group
+        currentMessageGroup++;
+        // Create a new empty message group
+        messageGroups[currentMessageGroup] = {
+          isMe: false,
+          messages: [],
+        };
+      }
+    }
+
+    // Reverse the last message group if it has multiple messages
+    if (messageGroups[currentMessageGroup].messages.length > 1) {
+      messageGroups[currentMessageGroup].messages.reverse();
+    }
+
+    // const latestMessage = messages[messages.length - 1];
     res.status(200).json({
       status: "success",
       data: {
         chat,
+        messageGroups,
       },
     });
   } catch (err: AppError | Error | any) {
@@ -187,7 +298,7 @@ export const updateGroupChatAdmins = async (
     }
     existingChat.admins = admins;
     await existingChat.save();
-    await existingChat.populate('users', 'name email photo');
+    await existingChat.populate("users", "name email photo");
 
     res.status(200).json({
       status: "success",
@@ -282,7 +393,7 @@ export const updateGroupChat = async (
     if (!updatedChat) {
       throw new AppError("Something went wrong", 500);
     }
-    await updatedChat.populate('users', 'name email photo')
+    await updatedChat.populate("users", "name email photo");
     res.status(200).json({
       status: "success",
       data: {
@@ -379,7 +490,7 @@ export const removeGroupChatUser = async (
     existingChat.users = filteredUsers;
     existingChat.admins = filteredAdmins;
     await existingChat.save();
-    await existingChat.populate('users', 'name email photo')
+    await existingChat.populate("users", "name email photo");
     res.status(204).json({
       status: "success",
       message: "Chat deleted from user chats",

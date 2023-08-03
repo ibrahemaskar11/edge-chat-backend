@@ -3,7 +3,7 @@ import { Request, Response } from "express";
 import userRouter from "./routes/userRoutes";
 import chatRouter from "./routes/chatRoutes";
 import messageRouter from "./routes/messageRoutes";
-import cors from "cors";
+import cors, { CorsOptions } from "cors";
 import AppError from "./utils/AppError";
 import cookieParser from "cookie-parser";
 import errorHandler from "./middleware/errorHandler";
@@ -30,7 +30,11 @@ declare global {
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-app.use(cors());
+const corsOptions: CorsOptions = {
+  origin: "http://localhost:3000",
+  credentials: true,
+};
+app.use(cors(corsOptions));
 app.use(cookieParser());
 
 // app.get("/", (req: Request, res: Response) => {

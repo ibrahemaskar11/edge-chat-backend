@@ -20,7 +20,7 @@ const createSendToken = (
         Number(process.env.JWT_COOKIE_EXPIRES_IN) * 24 * 60 * 60 * 1000
     ),
     httpOnly: true,
-    secure: req.secure || req.headers["x-forwarded-proto"] === "https",
+    secure: false,
   };
   res.cookie("jwt", token, cookieOptions);
   res.status(statusCode).json({
@@ -62,7 +62,6 @@ export const login = async (
       console.log("Incorrect email or password");
       throw new Error("Incorrect email or password");
     }
-    const token: string = signToken(user._id);
     createSendToken(user, 200, req, res);
   } catch (err: Error | any) {
     res.status(400).json({
@@ -77,6 +76,14 @@ export const signup = async (
   next: NextFunction
 ) => {
   try {
+    if (
+      !req.body.name ||
+      !req.body.email ||
+      !req.body.password ||
+      !req.body.passwordConfirm
+    ) {
+      throw new Error("Please provide all required information");
+    }
     const existingUser: IUser | null = await User.findOne({
       email: req.body.email,
     });
@@ -89,7 +96,6 @@ export const signup = async (
       password: req.body.password,
       passwordConfirm: req.body.passwordConfirm,
     });
-    const token: string = signToken(newUser._id);
     createSendToken(newUser, 200, req, res);
   } catch (err: Error | any) {
     res.status(400).json({
@@ -179,6 +185,7 @@ export const protect = async (
     } else if (req.cookies.jwt) {
       token = req.cookies.jwt;
     }
+    console.log(token);
     if (!token) {
       throw new AppError(
         "You are not logged in! please log in to get access",
@@ -218,4 +225,79 @@ export const protect = async (
       message: err.message,
     });
   }
+};
+
+export const validate = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    let token;
+    if (
+      req.headers.authorization &&
+      req.headers.authorization.startsWith("Bearer")
+    ) {
+      token = req.headers.authorization.split(" ")[1];
+    } else if (req.cookies.jwt) {
+      token = req.cookies.jwt;
+    }
+    console.log(token);
+    if (!token) {
+      throw new AppError(
+        "You are not logged in! please log in to get access",
+        401
+      );
+    }
+    const jwtVerifyPromisified = (token: string, secret: string) => {
+      return new Promise((resolve, reject) => {
+        jwt.verify(token, secret, {}, (err, payload) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(payload);
+          }
+        });
+      });
+    };
+    const decoded: any = await jwtVerifyPromisified(
+      token,
+      process.env.JWT_SECRET
+    );
+    const user = await User.findById(decoded.id);
+
+    if (!user)
+      throw new Error("The User belonging to the token no longer exists!");
+    if (user.changedPasswordAfter(decoded.iat)) {
+      throw new AppError(
+        "User recently changed password! Please log in again",
+        401
+      );
+    }
+    res.json({
+      status: "success",
+      data: {
+        user,
+      },
+    });
+  } catch (err: AppError | any) {
+    res.status(err.statusCode || 500).json({
+      status: err.status,
+      message: err.message,
+    });
+  }
+};
+
+export const logout = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  res.cookie("jwt", "loggedout", {
+    expires: new Date(Date.now() + 10 * 1000),
+    httpOnly: true,
+  });
+  res.status(200).json({
+    status: "success",
+  });
 };

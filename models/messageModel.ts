@@ -21,6 +21,10 @@ const messageSchema: mongoose.Schema<IMessage> = new mongoose.Schema(
         ref: "User",
       },
     ],
+    deleted: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
@@ -28,11 +32,9 @@ const messageSchema: mongoose.Schema<IMessage> = new mongoose.Schema(
 );
 
 messageSchema.pre(/^find/, function (next) {
-  this.populate("sender", "name email photo")
-    .populate("readBy")
-    .populate("chat");
-  next();
+  // this.populate("sender", "name email photo").populate("readBy");
+    next();
 });
 
 const Message = mongoose.model("Message", messageSchema);
-module.exports = Message;
+export default Message;

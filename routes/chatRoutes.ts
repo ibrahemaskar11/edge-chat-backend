@@ -17,6 +17,7 @@ router.patch("/group/:chatId", chatController.updateGroupChat);
 router.delete("/:chatId", chatController.deleteChat);
 router.delete('/remove-group-user/:chatId', chatController.removeGroupChatUser)
 router.post('/add-group-user/:chatId', chatController.addGroupChatUser)
+
 // router.patch('/leave-group/:chatId', chatController.leaveGroupChat)
 
 export default router;

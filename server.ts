@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 import app from "./app";
-import mongoose from "mongoose";
-
+import mongoose, { ConnectOptions } from "mongoose";
+import colors from "colors";
 dotenv.config({
   path: "./config.env",
 });
@@ -10,17 +10,20 @@ const PORT: string | number = process.env.PORT || 5000;
 console.log(process.env.EMAIL_DUMMY_HOST);
 
 mongoose
-  .connect(db)
+  .connect(db, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  } as ConnectOptions)
   .then(() => {
-    console.log("DB connection successful!");
+    console.log("DB connection successful!".underline);
   })
   .catch((err) => {
     console.log("failed to connect to db");
     process.exit(1);
   });
-
+colors.enable();
 const server = app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`Server is running on port ${PORT}`.underline);
 });
 
 // process.on("unhandledRejection", (err) => {

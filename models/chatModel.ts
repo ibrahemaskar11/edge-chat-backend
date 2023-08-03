@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
-import { IChat } from "utils/interfaces";
+import { IChat, IMessage } from "../utils/interfaces";
 import User from "./userModel";
+import Message from "./messageModel";
 const chatSchema: mongoose.Schema<IChat> = new mongoose.Schema(
   {
     users: [
@@ -31,19 +32,45 @@ const chatSchema: mongoose.Schema<IChat> = new mongoose.Schema(
       required: false,
       default: null,
     },
-    groupCreator:{
+    groupCreator: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: false,
-    }
+    },
   },
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );
 
-///////////////////////////////////////////
-// implement virtual for latestMessage
-///////////////////////////////////////////
+chatSchema.virtual("latestMessage", {
+  ref: "Message", // Reference the Message model
+  localField: "_id", // Local field to match with foreign field in Message model
+  foreignField: "chat", // Foreign field to match with local field in Chat model
+  justOne: true, // Retrieve only one message
+  options: { sort: { createdAt: -1 } }, // Sort by createdAt in descending order
+});
 
+chatSchema.virtual("latestMessage.timeSinceCreation").get(function () {
+  const currentDate = new Date();
+  const targetDate = this.latestMessage?.createdAt;
+  if (targetDate) {
+    const timeDiff = Math.abs(currentDate.getTime() - targetDate.getTime());
+    const seconds = Math.floor(timeDiff / 1000);
+
+    if (seconds < 60) {
+      return "now";
+    } else if (seconds < 3600) {
+      const minutes = Math.floor(seconds / 60);
+      return `${minutes}m`;
+    } else if (seconds < 86400) {
+      const hours = Math.floor(seconds / 3600);
+      return `${hours}h`;
+    } else {
+      const days = Math.floor(seconds / 86400);
+      return `${days}d`;
+    }
+  }
+  return undefined;
+});
 chatSchema.pre("save", async function (next) {
   //check if the users ids are in an indvidual chat already
   //check if the users actually exist
@@ -69,9 +96,12 @@ chatSchema.pre(/^find/, function (next) {
   // this.populate({
   //   path: "users",
   //   select: "name email photo",
+  // }).populate({
+  //   path: "admins",
+  //   select: "name email photo",
   // });
-  // this.select("-__v");
 
+  this.select("-__v");
   next();
 });
 

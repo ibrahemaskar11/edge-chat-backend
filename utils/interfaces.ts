@@ -7,14 +7,22 @@ export interface IChat extends mongoose.Document {
   chatName: string;
   groupImg: string | null;
   groupCreator: mongoose.Schema.Types.ObjectId | null;
+  latestMessage: IMessage | null;
+  
 }
 
 export interface IMessage extends mongoose.Document {
   message: string;
-  sender: mongoose.Schema.Types.ObjectId;
+  sender: IUser;
   chat: mongoose.Schema.Types.ObjectId;
   readBy: mongoose.Schema.Types.ObjectId[];
+  deleted: boolean;
+  createdAt: Date;
+  timeSinceCreation: string;
+  isMe: boolean;
 }
+
+
 
 export interface IUser extends mongoose.Document {
   name: string;

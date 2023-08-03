@@ -13,10 +13,12 @@
   "license": "ISC",
   "dependencies": {
     "@types/bcrypt": "^5.0.0",
+    "@types/colors": "^1.2.1",
     "@types/cookie-parser": "^1.4.3",
     "@types/mongoose": "^5.11.97",
     "@types/nodemailer": "^6.4.7",
     "bcrypt": "^5.1.0",
+    "colors": "^1.4.0",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
