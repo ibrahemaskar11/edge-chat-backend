@@ -43,3 +43,8 @@ export interface IUser extends mongoose.Document {
   createResetToken(): string;
   changedPasswordAfter(JWTTimestamp: number): boolean;
 }
+
+  export interface IMessageGroup {
+    isMe: boolean;
+    messages: IMessage[];
+  }

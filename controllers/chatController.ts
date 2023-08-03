@@ -4,6 +4,7 @@ import { IChat, IMessage } from "../utils/interfaces";
 import AppError from "../utils/AppError";
 import Message from "../models/messageModel";
 import User from "../models/userModel";
+import { IMessageGroup } from "../utils/interfaces";
 
 export const fetchChats = async (
   req: Request,
@@ -98,13 +99,11 @@ export const accessChat = async (
     }
     const messages: IMessage[] = await Message.find({
       chat: chatId,
-    }).sort({ createdAt: -1 }).populate("sender", "name email photo");
+    })
+      .sort({ createdAt: -1 })
+      .populate("sender", "name email photo");
 
-    interface IMessageGroup {
-      isMe: boolean;
-      messages: IMessage[];
-    }
-
+  
     const messageGroups: IMessageGroup[] = [{ isMe: false, messages: [] }];
     let currentMessageGroup = 0;
 
@@ -114,29 +113,24 @@ export const accessChat = async (
       const currentMessage = messages[i];
 
       if (!previousMessage || !nextMessage) {
-        // If previousMessage or nextMessage is missing, it means it's the first or last message in the group
         messageGroups[currentMessageGroup].messages.push(currentMessage);
         messageGroups[currentMessageGroup].isMe =
           currentMessage.sender._id.toString() === requestingUser.id.toString();
       } else if (
-        currentMessage.sender._id.toString() === nextMessage.sender._id.toString()
+        currentMessage.sender._id.toString() ===
+        nextMessage.sender._id.toString()
       ) {
-        // If the current message sender matches the next message sender, they belong to the same group
         messageGroups[currentMessageGroup].messages.push(currentMessage);
         messageGroups[currentMessageGroup].isMe =
           currentMessage.sender._id.toString() === requestingUser.id.toString();
       } else {
-        // If the current message sender doesn't match the next message sender, it's a new group
         messageGroups[currentMessageGroup].messages.push(currentMessage);
-        // Reverse the messages within the group after pushing them
         messageGroups[currentMessageGroup].messages.reverse();
-        // Set the isMe flag for the current group based on the first message in the group
         messageGroups[currentMessageGroup].isMe =
-          messageGroups[currentMessageGroup].messages[0].sender._id.toString() ===
-          requestingUser.id.toString();
-        // Move to the next message group
+          messageGroups[
+            currentMessageGroup
+          ].messages[0].sender._id.toString() === requestingUser.id.toString();
         currentMessageGroup++;
-        // Create a new empty message group
         messageGroups[currentMessageGroup] = {
           isMe: false,
           messages: [],
@@ -144,16 +138,17 @@ export const accessChat = async (
       }
     }
 
-    // Reverse the last message group if it has multiple messages
     if (messageGroups[currentMessageGroup].messages.length > 1) {
       messageGroups[currentMessageGroup].messages.reverse();
     }
-
-    // const latestMessage = messages[messages.length - 1];
+    const users = await User.find({ _id: { $in: chat.users } }).select(
+      "name email photo"
+    );
     res.status(200).json({
       status: "success",
       data: {
         chat,
+        users,
         messageGroups,
       },
     });
